@@ -155,9 +155,34 @@ def _market_display_name(m: dict[str, Any]) -> str:
     return " · ".join(p for p in parts if p)
 
 
+# Kalshi event URLs are /markets/<series>/<series-slug>/<event-ticker>. The slug
+# is series-specific and not exposed via the API, so we hard-code the 14 weather
+# series we trade. Confirmed via search 2026-05-05.
+_SERIES_SLUG: dict[str, str] = {
+    "KXHIGHNY": "highest-temperature-in-nyc",
+    "KXLOWTNYC": "lowest-temperature-in-nyc",
+    "KXHIGHLAX": "highest-temperature-in-los-angeles",
+    "KXLOWTLAX": "lowest-temperature-in-la",
+    "KXHIGHMIA": "highest-temperature-in-miami",
+    "KXLOWTMIA": "lowest-temperature-in-miami",
+    "KXHIGHCHI": "highest-temperature-in-chicago",
+    "KXLOWTCHI": "lowest-temperature-chicago",
+    "KXHIGHAUS": "highest-temperature-in-austin",
+    "KXLOWTAUS": "lowest-temperature-in-austin",
+    "KXHIGHDEN": "highest-temperature-in-denver",
+    "KXLOWTDEN": "lowest-temperature-in-denver",
+    "KXHIGHPHIL": "highest-temperature-in-philadelphia",
+    "KXLOWTPHIL": "lowest-temperature-in-philadelphia",
+}
+
+
 def _kalshi_url(ticker: str, event_ticker: str | None) -> str:
-    base = (event_ticker or ticker).lower()
-    return f"https://kalshi.com/markets/{base}"
+    series = (event_ticker or ticker).split("-", 1)[0].upper()
+    event = (event_ticker or ticker).lower()
+    slug = _SERIES_SLUG.get(series)
+    if slug:
+        return f"https://kalshi.com/markets/{series.lower()}/{slug}/{event}"
+    return f"https://kalshi.com/markets/{series.lower()}"
 
 
 def _market_rows(state: DashboardState) -> list[dict[str, Any]]:
