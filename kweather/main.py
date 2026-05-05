@@ -96,6 +96,7 @@ class Orchestrator:
         )
         self.ws = KalshiWS(settings, self._on_ws_message)
         self.ws.add_reconnect_hook(self._resync_books)
+        self.ws.add_state_change_hook(self._on_ws_state)
         self.paused = False
         self._tasks: list[asyncio.Task] = []
 
@@ -237,6 +238,9 @@ class Orchestrator:
             self.state.daily_pnl_cents = await self.store.fetch_today_pnl()
         except Exception:
             pass
+
+    async def _on_ws_state(self, connected: bool) -> None:
+        self.state.connected_ws = connected
 
     async def _resync_books(self) -> None:
         for ticker in list(self.markets.keys()):

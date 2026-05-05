@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import re
 import time
 import uuid
@@ -53,9 +54,11 @@ class PlacementResult:
     raw: dict[str, Any]
 
 
-# Kalshi weather event ticker patterns.
-KXHIGH_RE = re.compile(r"^KXHIGH(?P<city>[A-Z]+)-(?P<date>\d{2}[A-Z]{3}\d{2})-(?P<bracket>[T0-9-]+)$")
-KXLOW_RE = re.compile(r"^KXLOW(?P<city>[A-Z]+)-(?P<date>\d{2}[A-Z]{3}\d{2})-(?P<bracket>[T0-9-]+)$")
+# Kalshi weather market ticker shape: <SERIES>-<DATE>-<BRACKET>
+# DATE is 25NOV05; BRACKET is one of T<int>, B<num>, A<num>, <num>-T-<num>.
+WEATHER_TICKER_RE = re.compile(
+    r"^(?P<series>KX(?:HIGH|LOW)T?[A-Z0-9]+)-(?P<date>\d{2}[A-Z]{3}\d{2})-(?P<bracket>.+)$"
+)
 
 
 def _parse_kalshi_date(s: str) -> str:
@@ -70,35 +73,72 @@ def _parse_kalshi_date(s: str) -> str:
     return f"{year:04d}-{month:02d}-{int(dd):02d}"
 
 
+_NUM_RE = re.compile(r"^\d+(?:\.\d+)?$")
+
+
+def _parse_bracket_from_subtitle(subtitle: str, label: str) -> Bracket | None:
+    """Kalshi weather subtitles are unambiguous range descriptions.
+
+    Forms (degree symbol may be present or absent):
+        "85° or below"   → lo=None, hi=86
+        "94° or above"   → lo=94,   hi=None
+        "86° to 87°"     → lo=86,   hi=88
+        "below 32"       → lo=None, hi=32 (cold tail variant)
+        "above 100"      → lo=101,  hi=None
+    """
+    s = subtitle.replace("°", "").strip().lower()
+    m = re.match(r"^\s*(-?\d+)\s*(?:or)?\s*below\s*$", s)
+    if m:
+        return Bracket(lo=None, hi=int(m.group(1)) + 1, label=label)
+    m = re.match(r"^\s*below\s*(-?\d+)\s*$", s)
+    if m:
+        return Bracket(lo=None, hi=int(m.group(1)), label=label)
+    m = re.match(r"^\s*(-?\d+)\s*(?:or)?\s*above\s*$", s)
+    if m:
+        return Bracket(lo=int(m.group(1)), hi=None, label=label)
+    m = re.match(r"^\s*above\s*(-?\d+)\s*$", s)
+    if m:
+        return Bracket(lo=int(m.group(1)) + 1, hi=None, label=label)
+    m = re.match(r"^\s*(-?\d+)\s*to\s*(-?\d+)\s*$", s)
+    if m:
+        return Bracket(lo=int(m.group(1)), hi=int(m.group(2)) + 1, label=label)
+    return None
+
+
 def _parse_bracket(label: str) -> Bracket:
     """Decode a Kalshi bracket suffix.
 
+    CLI temps are integer; bracket convention is [lo, hi) with the rounding offset
+    -0.5 applied in `_adjusted_bounds`. Half-degree thresholds (e.g. B73.5) round
+    to the next integer boundary so lo-0.5 / hi-0.5 land on the correct half-degree.
+
     Examples:
-        "T76"      -> single integer 76 → lo=76, hi=77
-        "73-T-77"  -> range 73..77 inclusive → lo=73, hi=78
-        "B72"      -> below 72 → lo=None, hi=72  (we treat 'B' as below; some versions use 'BL')
-        "A77"      -> above 77 → lo=78, hi=None
-    Falls back to a single-temp heuristic if the suffix is unrecognized.
+        "T76"      -> Bracket(lo=76, hi=77)              # integer high == 76
+        "73-T-77"  -> Bracket(lo=73, hi=78)              # integer high in [73, 77]
+        "B72"      -> Bracket(lo=None, hi=72)            # high < 72
+        "B73.5"    -> Bracket(lo=None, hi=74)            # high <= 73 (continuous < 73.5)
+        "A77"      -> Bracket(lo=78, hi=None)            # high > 77
+        "A85.5"    -> Bracket(lo=86, hi=None)            # high >= 86 (continuous > 85.5)
     """
     s = label.upper().strip()
-    if s.startswith("T") and s[1:].isdigit():
-        v = int(s[1:])
+    if s.startswith("T") and _NUM_RE.match(s[1:]):
+        v = int(float(s[1:]))
         return Bracket(lo=v, hi=v + 1, label=label)
-    m = re.match(r"^(\d+)-T-(\d+)$", s)
+    m = re.match(r"^(\d+(?:\.\d+)?)-T-(\d+(?:\.\d+)?)$", s)
     if m:
-        lo = int(m.group(1))
-        hi = int(m.group(2)) + 1
+        lo = int(math.floor(float(m.group(1))))
+        hi = int(math.floor(float(m.group(2)))) + 1
         return Bracket(lo=lo, hi=hi, label=label)
-    if s.startswith("B") and s[1:].isdigit():
-        return Bracket(lo=None, hi=int(s[1:]), label=label)
-    if s.startswith("A") and s[1:].isdigit():
-        return Bracket(lo=int(s[1:]) + 1, hi=None, label=label)
+    if s.startswith("B") and _NUM_RE.match(s[1:]):
+        return Bracket(lo=None, hi=int(math.ceil(float(s[1:]))), label=label)
+    if s.startswith("A") and _NUM_RE.match(s[1:]):
+        return Bracket(lo=int(math.floor(float(s[1:]))) + 1, hi=None, label=label)
     if s.endswith("OR-BELOW"):
-        v = int(re.search(r"\d+", s).group(0))
-        return Bracket(lo=None, hi=v + 1, label=label)
+        v = float(re.search(r"\d+(?:\.\d+)?", s).group(0))
+        return Bracket(lo=None, hi=int(math.ceil(v)) + (0 if v != math.floor(v) else 1), label=label)
     if s.endswith("OR-ABOVE"):
-        v = int(re.search(r"\d+", s).group(0))
-        return Bracket(lo=v, hi=None, label=label)
+        v = float(re.search(r"\d+(?:\.\d+)?", s).group(0))
+        return Bracket(lo=int(math.floor(v)), hi=None, label=label)
     return Bracket(lo=None, hi=None, label=label)
 
 
@@ -171,7 +211,14 @@ class KalshiREST:
 
     async def list_weather_markets(self, stations: list) -> list[Market]:
         out: list[Market] = []
-        for series in ("KXHIGH", "KXLOW"):
+        # Build (series_ticker, station_code, target) tuples from explicit station config.
+        targets: list[tuple[str, str, str]] = []
+        for st in stations:
+            if getattr(st, "kalshi_high_series", None):
+                targets.append((st.kalshi_high_series, st.code, "high"))
+            if getattr(st, "kalshi_low_series", None):
+                targets.append((st.kalshi_low_series, st.code, "low"))
+        for series, station_code, target in targets:
             try:
                 rows = await self.list_markets(status="open", series_ticker=series)
             except Exception:
@@ -179,19 +226,18 @@ class KalshiREST:
                 continue
             for row in rows:
                 ticker = row.get("ticker", "")
-                m = KXHIGH_RE.match(ticker) or KXLOW_RE.match(ticker)
+                m = WEATHER_TICKER_RE.match(ticker)
                 if not m:
                     continue
-                target = "high" if ticker.startswith("KXHIGH") else "low"
-                station = _city_to_station(m.group("city"), stations)
-                if station is None:
-                    continue
-                bracket = _parse_bracket(m.group("bracket"))
+                subtitle = row.get("subtitle") or ""
+                bracket = _parse_bracket_from_subtitle(subtitle, m.group("bracket"))
+                if bracket is None:
+                    bracket = _parse_bracket(m.group("bracket"))
                 out.append(
                     Market(
                         ticker=ticker,
                         event_ticker=row.get("event_ticker", ""),
-                        station_code=station,
+                        station_code=station_code,
                         target=target,
                         target_date=_parse_kalshi_date(m.group("date")),
                         bracket=bracket,

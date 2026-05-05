@@ -28,6 +28,8 @@ class Station:
     peak_local_hour: int
     sea_breeze: bool
     region: str
+    kalshi_high_series: str | None = None
+    kalshi_low_series: str | None = None
 
 
 @dataclass

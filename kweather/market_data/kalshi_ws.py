@@ -36,6 +36,19 @@ class KalshiWS:
         self._tickers: set[str] = set()
         self._cmd_id = 0
         self._on_reconnect: list[Callable[[], Awaitable[None]]] = []
+        self.is_connected: bool = False
+        self._on_state_change: list[Callable[[bool], Awaitable[None]]] = []
+
+    def add_state_change_hook(self, fn: Callable[[bool], Awaitable[None]]) -> None:
+        self._on_state_change.append(fn)
+
+    async def _set_state(self, connected: bool) -> None:
+        self.is_connected = connected
+        for fn in self._on_state_change:
+            try:
+                await fn(connected)
+            except Exception:
+                log.exception("WS state-change hook failed")
 
     def add_reconnect_hook(self, fn: Callable[[], Awaitable[None]]) -> None:
         self._on_reconnect.append(fn)
@@ -75,6 +88,7 @@ class KalshiWS:
                 await self._connect_and_loop()
                 backoff = 1.0
             except Exception as e:
+                await self._set_state(False)
                 log.warning("WS loop error: %s", e)
                 jitter = random.uniform(0.5, 1.5)
                 await asyncio.sleep(min(30.0, backoff) * jitter)
@@ -97,6 +111,7 @@ class KalshiWS:
         ) as ws:
             self._ws = ws
             log.info("WS connected: %s", self.settings.kalshi_ws_url)
+            await self._set_state(True)
             for fn in self._on_reconnect:
                 try:
                     await fn()
