@@ -43,7 +43,7 @@
     <table id="markets-table">
       <thead>
         <tr>
-          <th>Ticker</th><th>Stn</th><th>Date</th><th>Bracket</th>
+          <th>Market</th><th>Stn</th><th>Date</th><th>Bracket</th>
           <th>Theo</th><th>σ</th>
           <th>Bid</th><th>Ask</th><th>Mid</th><th>Sprd</th><th>Edge</th>
           <th>Our Bid</th><th>Our Ask</th><th>Pos</th>
@@ -71,8 +71,9 @@
       for (const r of rows) {
         const tr = document.createElement("tr");
         tr.className = "row state-" + (r.state || "flat");
+        const linkLabel = (r.display_name || r.ticker).replace(/&/g, "&amp;").replace(/</g, "&lt;");
         tr.innerHTML = `
-          <td class="ticker">${r.ticker}</td>
+          <td class="ticker"><a href="${r.kalshi_url}" target="_blank" rel="noopener" title="${r.ticker}">${linkLabel}</a></td>
           <td>${fmt(r.station)}</td>
           <td>${fmt(r.target_date)}</td>
           <td>${fmt(r.bracket_label)}</td>

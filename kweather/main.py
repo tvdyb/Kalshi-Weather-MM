@@ -130,6 +130,10 @@ class Orchestrator:
                 "station_code": m.station_code,
                 "target_date": m.target_date,
                 "bracket_label": m.bracket.label,
+                "bracket_lo": m.bracket.lo,
+                "bracket_hi": m.bracket.hi,
+                "target": m.target,
+                "event_ticker": m.event_ticker,
             }
             await self.store.upsert_market(
                 {

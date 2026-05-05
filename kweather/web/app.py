@@ -119,6 +119,47 @@ def _serialize_state(state: DashboardState) -> dict[str, Any]:
     }
 
 
+_MONTH_ABBR = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+
+def _format_bracket(lo: float | None, hi: float | None) -> str:
+    lo_i = int(lo) if lo is not None else None
+    hi_i = int(hi) if hi is not None else None
+    if lo_i is None and hi_i is not None:
+        return f"≤{hi_i - 1}°"
+    if lo_i is not None and hi_i is None:
+        return f"≥{lo_i}°"
+    if lo_i is not None and hi_i is not None:
+        if hi_i - lo_i == 1:
+            return f"{lo_i}°"
+        return f"{lo_i}–{hi_i - 1}°"  # noqa: RUF001
+    return "—"
+
+
+def _format_date_short(target_date: str | None) -> str:
+    if not target_date:
+        return ""
+    try:
+        y, m, d = target_date.split("-")
+        return f"{_MONTH_ABBR[int(m) - 1]} {int(d)}"
+    except Exception:
+        return target_date
+
+
+def _market_display_name(m: dict[str, Any]) -> str:
+    station = (m.get("station_code") or "").lstrip("K") or "?"
+    target = (m.get("target") or "").upper() or "?"
+    when = _format_date_short(m.get("target_date"))
+    rng = _format_bracket(m.get("bracket_lo"), m.get("bracket_hi"))
+    parts = [station, target, when, rng]
+    return " · ".join(p for p in parts if p)
+
+
+def _kalshi_url(ticker: str, event_ticker: str | None) -> str:
+    base = (event_ticker or ticker).lower()
+    return f"https://kalshi.com/markets/{base}"
+
+
 def _market_rows(state: DashboardState) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for ticker, m in state.markets.items():
@@ -130,6 +171,8 @@ def _market_rows(state: DashboardState) -> list[dict[str, Any]]:
         rows.append(
             {
                 "ticker": ticker,
+                "display_name": _market_display_name(m),
+                "kalshi_url": _kalshi_url(ticker, m.get("event_ticker")),
                 "station": m.get("station_code"),
                 "target_date": m.get("target_date"),
                 "bracket_label": m.get("bracket_label"),

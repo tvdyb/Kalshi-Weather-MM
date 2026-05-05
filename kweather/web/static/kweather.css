@@ -43,4 +43,5 @@ th { color: var(--muted); font-weight: 500; }
 .row.state-wide_disagreement { color: var(--muted); }
 .row.state-flat { color: var(--muted); }
 
-.ticker { color: var(--blue); }
+.ticker a { color: var(--blue); text-decoration: none; }
+.ticker a:hover { text-decoration: underline; }

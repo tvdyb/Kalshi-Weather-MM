@@ -1,6 +1,6 @@
 {% for r in rows %}
 <tr class="row state-{{ r.state or 'flat' }}">
-  <td>{{ r.ticker }}</td>
+  <td class="ticker"><a href="{{ r.kalshi_url }}" target="_blank" rel="noopener" title="{{ r.ticker }}">{{ r.display_name or r.ticker }}</a></td>
   <td>{{ r.station or '—' }}</td>
   <td>{{ r.target_date or '—' }}</td>
   <td>{{ r.bracket_label or '—' }}</td>

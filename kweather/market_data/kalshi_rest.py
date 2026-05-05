@@ -108,17 +108,16 @@ def _parse_bracket_from_subtitle(subtitle: str, label: str) -> Bracket | None:
 def _parse_bracket(label: str) -> Bracket:
     """Decode a Kalshi bracket suffix.
 
-    CLI temps are integer; bracket convention is [lo, hi) with the rounding offset
-    -0.5 applied in `_adjusted_bounds`. Half-degree thresholds (e.g. B73.5) round
-    to the next integer boundary so lo-0.5 / hi-0.5 land on the correct half-degree.
-
-    Examples:
-        "T76"      -> Bracket(lo=76, hi=77)              # integer high == 76
-        "73-T-77"  -> Bracket(lo=73, hi=78)              # integer high in [73, 77]
-        "B72"      -> Bracket(lo=None, hi=72)            # high < 72
-        "B73.5"    -> Bracket(lo=None, hi=74)            # high <= 73 (continuous < 73.5)
-        "A77"      -> Bracket(lo=78, hi=None)            # high > 77
-        "A85.5"    -> Bracket(lo=86, hi=None)            # high >= 86 (continuous > 85.5)
+    Kalshi weather convention:
+        "T76"        -> tail at 76; direction (lower vs upper) is event-dependent
+                        and resolved post-hoc. Provisional: 1° point [76, 77).
+        "B<x>.5"     -> 2° range centered at x.5 → [floor(x), floor(x)+2)
+                        e.g. "B73.5" → [73, 75) i.e. {73, 74}
+                             "B86.5" → [86, 88) i.e. {86, 87}
+        "B<int>"     -> "below x" tail → (-∞, x)
+        "A<x>.5"     -> "above" tail with rounding → [floor(x)+1, ∞)
+        "A<int>"     -> "above" tail → [x+1, ∞)
+        "73-T-77"    -> explicit range → [73, 78)
     """
     s = label.upper().strip()
     if s.startswith("T") and _NUM_RE.match(s[1:]):
@@ -130,7 +129,11 @@ def _parse_bracket(label: str) -> Bracket:
         hi = int(math.floor(float(m.group(2)))) + 1
         return Bracket(lo=lo, hi=hi, label=label)
     if s.startswith("B") and _NUM_RE.match(s[1:]):
-        return Bracket(lo=None, hi=int(math.ceil(float(s[1:]))), label=label)
+        v = float(s[1:])
+        if v != math.floor(v):
+            base = int(math.floor(v))
+            return Bracket(lo=base, hi=base + 2, label=label)
+        return Bracket(lo=None, hi=int(v), label=label)
     if s.startswith("A") and _NUM_RE.match(s[1:]):
         return Bracket(lo=int(math.floor(float(s[1:]))) + 1, hi=None, label=label)
     if s.endswith("OR-BELOW"):
@@ -140,6 +143,32 @@ def _parse_bracket(label: str) -> Bracket:
         v = float(re.search(r"\d+(?:\.\d+)?", s).group(0))
         return Bracket(lo=int(math.floor(v)), hi=None, label=label)
     return Bracket(lo=None, hi=None, label=label)
+
+
+_T_LABEL_RE = re.compile(r"^T(\d+)$", re.IGNORECASE)
+
+
+def _resolve_tail_brackets(events: dict[str, list[Market]], suffix_only: set[str]) -> None:
+    """Within each event, the lowest T<x> label is the lower tail (≤x) and the
+    highest T<x> label is the upper tail (≥x). Subtitle-parsed brackets are
+    already correct, so only rewrite markets in `suffix_only`.
+    """
+    for markets in events.values():
+        t_markets: list[tuple[int, Market]] = []
+        for mk in markets:
+            if mk.ticker not in suffix_only:
+                continue
+            m = _T_LABEL_RE.match(mk.bracket.label.strip())
+            if m:
+                t_markets.append((int(m.group(1)), mk))
+        if not t_markets:
+            continue
+        t_markets.sort(key=lambda kv: kv[0])
+        lo_v, lo_m = t_markets[0]
+        lo_m.bracket = Bracket(lo=None, hi=lo_v + 1, label=lo_m.bracket.label)
+        if len(t_markets) > 1:
+            hi_v, hi_m = t_markets[-1]
+            hi_m.bracket = Bracket(lo=hi_v, hi=None, label=hi_m.bracket.label)
 
 
 def _city_to_station(city: str, stations: list) -> str | None:
@@ -218,6 +247,10 @@ class KalshiREST:
                 targets.append((st.kalshi_high_series, st.code, "high"))
             if getattr(st, "kalshi_low_series", None):
                 targets.append((st.kalshi_low_series, st.code, "low"))
+        # Track which markets relied on suffix-only parsing so we can resolve T<x>
+        # tails post-hoc (lowest T<x> in an event = lower tail; highest = upper tail).
+        suffix_only: set[str] = set()
+        events: dict[str, list[Market]] = {}
         for series, station_code, target in targets:
             try:
                 rows = await self.list_markets(status="open", series_ticker=series)
@@ -233,21 +266,23 @@ class KalshiREST:
                 bracket = _parse_bracket_from_subtitle(subtitle, m.group("bracket"))
                 if bracket is None:
                     bracket = _parse_bracket(m.group("bracket"))
-                out.append(
-                    Market(
-                        ticker=ticker,
-                        event_ticker=row.get("event_ticker", ""),
-                        station_code=station_code,
-                        target=target,
-                        target_date=_parse_kalshi_date(m.group("date")),
-                        bracket=bracket,
-                        open_ts=_parse_iso_or_now(row.get("open_time")),
-                        close_ts=_parse_iso_or_now(row.get("close_time")),
-                        last_price=row.get("last_price"),
-                        yes_bid=row.get("yes_bid"),
-                        yes_ask=row.get("yes_ask"),
-                    )
+                    suffix_only.add(ticker)
+                market = Market(
+                    ticker=ticker,
+                    event_ticker=row.get("event_ticker", ""),
+                    station_code=station_code,
+                    target=target,
+                    target_date=_parse_kalshi_date(m.group("date")),
+                    bracket=bracket,
+                    open_ts=_parse_iso_or_now(row.get("open_time")),
+                    close_ts=_parse_iso_or_now(row.get("close_time")),
+                    last_price=row.get("last_price"),
+                    yes_bid=row.get("yes_bid"),
+                    yes_ask=row.get("yes_ask"),
                 )
+                out.append(market)
+                events.setdefault(market.event_ticker, []).append(market)
+        _resolve_tail_brackets(events, suffix_only)
         return out
 
     async def get_orderbook(self, ticker: str, depth: int = 50) -> dict[str, Any]:
