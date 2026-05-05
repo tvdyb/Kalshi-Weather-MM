@@ -48,11 +48,9 @@ def make_app(state: DashboardState, bus: EventBus, controls) -> FastAPI:
     @app.get("/", response_class=HTMLResponse)
     async def index(request: Request) -> Any:
         return TEMPLATES.TemplateResponse(
+            request,
             "index.html",
-            {
-                "request": request,
-                "state": state,
-            },
+            {"state": state},
         )
 
     @app.get("/api/state", response_class=JSONResponse)
@@ -62,8 +60,9 @@ def make_app(state: DashboardState, bus: EventBus, controls) -> FastAPI:
     @app.get("/api/rows", response_class=HTMLResponse)
     async def api_rows(request: Request) -> Any:
         return TEMPLATES.TemplateResponse(
+            request,
             "rows.html",
-            {"request": request, "rows": _market_rows(state)},
+            {"rows": _market_rows(state)},
         )
 
     @app.get("/api/health", response_class=PlainTextResponse)

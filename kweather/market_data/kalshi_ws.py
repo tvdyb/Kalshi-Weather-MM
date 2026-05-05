@@ -90,7 +90,7 @@ class KalshiWS:
 
         async with websockets.connect(
             self.settings.kalshi_ws_url,
-            extra_headers=list(headers.items()) if headers else None,
+            additional_headers=list(headers.items()) if headers else None,
             ping_interval=20,
             ping_timeout=20,
             max_size=8 * 1024 * 1024,
