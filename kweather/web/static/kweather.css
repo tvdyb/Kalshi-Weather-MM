@@ -1,0 +1,46 @@
+:root {
+  --bg: #0c1014;
+  --panel: #141a21;
+  --fg: #e6edf3;
+  --muted: #8a96a3;
+  --green: #4cc38a;
+  --red: #f0506e;
+  --amber: #ffc857;
+  --blue: #6aa9ff;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 13px; }
+header { display: flex; justify-content: space-between; align-items: center; padding: 8px 16px; background: var(--panel); border-bottom: 1px solid #1f2730; }
+.status { display: flex; gap: 8px; align-items: center; }
+.status .sep { color: var(--muted); }
+.status b { color: var(--blue); }
+.controls button { background: #1f2730; color: var(--fg); border: 1px solid #2a333d; padding: 6px 10px; cursor: pointer; }
+.controls button:hover { background: #2a333d; }
+
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
+.dot.on { background: var(--green); }
+.dot.off { background: var(--red); }
+
+section { padding: 12px 16px; }
+section h3 { margin: 0 0 8px; color: var(--muted); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+
+.vol-timeline #vol-windows { position: relative; height: 28px; background: #11161c; border: 1px solid #1f2730; }
+.vol-window { position: absolute; top: 4px; bottom: 4px; border-radius: 2px; opacity: 0.85; }
+.vol-window.sev-low { background: #2a4a3a; }
+.vol-window.sev-normal { background: #4a3a2a; }
+.vol-window.sev-high { background: #5a1f1f; }
+
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 4px 8px; border-bottom: 1px solid #1a2129; }
+th { color: var(--muted); font-weight: 500; }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+.row.state-two_sided { background: rgba(76, 195, 138, 0.08); }
+.row.state-bid_only { background: rgba(106, 169, 255, 0.06); }
+.row.state-ask_only { background: rgba(255, 200, 87, 0.06); }
+.row.state-withdrawn_vol { background: rgba(240, 80, 110, 0.06); }
+.row.state-wide_disagreement { color: var(--muted); }
+.row.state-flat { color: var(--muted); }
+
+.ticker { color: var(--blue); }

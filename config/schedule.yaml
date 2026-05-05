@@ -1,0 +1,86 @@
+# Vol windows (deterministic & probabilistic). Times are local-to-event unless noted.
+# cancel_lead_seconds = how early before event start to pull quotes.
+# requote_delay_seconds = how long after event end before re-quoting.
+
+deterministic:
+  - name: HRRR_top_of_hour
+    cron_minutes: [50]                  # publish ~HH:50 UTC after model run
+    duration_seconds: 300
+    cancel_lead_seconds: 30
+    requote_delay_seconds: 60
+    applies_to: all
+
+  - name: NBM_hourly
+    cron_minutes: [15]                  # NBM hourly; latency varies — pull around HH:15
+    duration_seconds: 600
+    cancel_lead_seconds: 30
+    requote_delay_seconds: 60
+    applies_to: all
+
+  - name: GFS_runs
+    et_local_times: ["03:30", "09:30", "15:30", "21:30"]
+    duration_seconds: 600
+    cancel_lead_seconds: 60
+    requote_delay_seconds: 60
+    applies_to: all
+
+  - name: ECMWF_runs
+    et_local_times: ["04:00", "16:00"]
+    duration_seconds: 900
+    cancel_lead_seconds: 60
+    requote_delay_seconds: 60
+    applies_to: all
+
+  - name: NWS_local_forecast_push
+    et_local_times: ["05:30", "09:30", "15:30", "21:30"]
+    duration_seconds: 300
+    cancel_lead_seconds: 30
+    requote_delay_seconds: 60
+    applies_to: all
+
+  - name: ASOS_METAR_cycle
+    cron_minutes: [53]
+    duration_seconds: 60
+    cancel_lead_seconds: 5
+    requote_delay_seconds: 30
+    applies_to: all
+    severity: low
+
+  - name: METAR_6h_cap
+    utc_hours: [0, 6, 12, 18]
+    duration_seconds: 120
+    cancel_lead_seconds: 30
+    requote_delay_seconds: 60
+    applies_to: all
+
+  - name: CLI_publication
+    et_local_window: ["06:00", "09:00"]
+    cancel_lead_seconds: 60
+    requote_delay_seconds: 0             # market is settling — no requote
+    applies_to: settlement_day
+
+probabilistic:
+  - name: peak_hour_widen
+    rule: peak_hour                       # widen, do not cancel
+    widen_factor: 1.25
+    size_factor: 0.75
+    local_window: ["13:00", "17:00"]
+    applies_to: all
+
+  - name: high_ensemble_spread
+    rule: ens_std_quintile_top
+    widen_factor: 2.0
+    size_factor: 0.5
+    applies_to: all
+
+  - name: frontal_passage
+    rule: forecast_dewpoint_or_winddir_change
+    cancel_window_minutes: [-15, 60]      # cancel from -15 min to +60 min around predicted passage
+    applies_to: all
+
+  - name: sea_breeze_morning
+    rule: sea_breeze_station
+    widen_factor: 1.5
+    size_factor: 0.75
+    local_window: ["10:00", "12:00"]
+    applies_to_stations: [KLAX, KMIA]

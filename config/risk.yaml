@@ -1,0 +1,32 @@
+# Risk caps and edge thresholds.
+defaults:
+  notional_cap_usd: 500          # max gross dollar notional per market
+  position_cap_contracts: 1000   # max long+short contracts per bracket
+  tight_threshold_cents: 2       # |theo - mid| under which we two-side
+  stale_threshold_cents: 8       # |theo - mid| over which we go flat
+  half_spread_cents: 1           # base half-spread on either side of theo
+  half_spread_sigma_coef: 0.5    # extra cents of half-spread per F of theo sigma
+  fee_buffer_cents: 1            # safety margin baked into edge calc
+  kelly_fraction: 0.25           # fractional Kelly applied to maker leg
+  cancel_debounce_ms: 250        # min gap between cancels for same market
+
+per_market_overrides:
+  # KXHIGHNYC-25NOV05-T76:
+  #   notional_cap_usd: 250
+
+correlation_caps:
+  NE_corridor: 1500
+  midwest: 1500
+  SE_atlantic: 1000
+  SW_pacific: 1000
+  south_central: 750
+  mountain: 750
+
+daily_stop:
+  loss_usd: 200                  # pause new orders if intraday P&L < -200
+
+fees:
+  # Kalshi fee schedule. Values are fractions of notional.
+  trading_pct: 0.01              # 1% of notional, taker side
+  settlement_pct: 0.10           # 10% of profit at settlement
+  maker_rebate_pct: 0.0          # rebate, if any, from incentive program

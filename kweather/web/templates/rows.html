@@ -1,0 +1,22 @@
+{% for r in rows %}
+<tr class="row state-{{ r.state or 'flat' }}">
+  <td>{{ r.ticker }}</td>
+  <td>{{ r.station or '—' }}</td>
+  <td>{{ r.target_date or '—' }}</td>
+  <td>{{ r.bracket_label or '—' }}</td>
+  <td class="num">{{ r.theo_cents if r.theo_cents is not none else '—' }}</td>
+  <td class="num">{{ '%.2f'|format(r.sigma_f) if r.sigma_f is not none else '—' }}</td>
+  <td class="num">{{ r.best_bid if r.best_bid is not none else '—' }}</td>
+  <td class="num">{{ r.best_ask if r.best_ask is not none else '—' }}</td>
+  <td class="num">{{ '%.1f'|format(r.mid) if r.mid is not none else '—' }}</td>
+  <td class="num">{{ r.spread if r.spread is not none else '—' }}</td>
+  <td class="num">{{ '%.1f'|format(r.edge_to_mid) if r.edge_to_mid is not none else '—' }}</td>
+  <td class="num">{{ r.our_bid if r.our_bid is not none else '—' }}</td>
+  <td class="num">{{ r.our_ask if r.our_ask is not none else '—' }}</td>
+  <td class="num">{{ r.position }}</td>
+  <td>{{ 'Y' if r.tob_bid else '—' }}/{{ 'Y' if r.tob_ask else '—' }}</td>
+  <td>{{ 'Y' if r.reward_eligible_bid else '—' }}/{{ 'Y' if r.reward_eligible_ask else '—' }}</td>
+  <td>{{ r.state }}</td>
+  <td class="num">{{ '%.2f'|format(r.pnl_cents / 100.0) }}</td>
+</tr>
+{% endfor %}

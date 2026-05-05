@@ -1,0 +1,84 @@
+# 8 highest-liquidity Kalshi weather stations
+# Coords are the official ASOS/CLI station; peak_local_hour is the typical Tmax window center.
+stations:
+  - code: KNYC          # Central Park, NY
+    kalshi_city: NY
+    name: New York (Central Park)
+    lat: 40.7794
+    lon: -73.9692
+    timezone: America/New_York
+    peak_local_hour: 15
+    sea_breeze: false
+    region: NE_corridor
+  - code: KLAX          # Los Angeles International
+    kalshi_city: LAX
+    name: Los Angeles
+    lat: 33.9382
+    lon: -118.3865
+    timezone: America/Los_Angeles
+    peak_local_hour: 14
+    sea_breeze: true
+    region: SW_pacific
+  - code: KMIA          # Miami International
+    kalshi_city: MIA
+    name: Miami
+    lat: 25.7905
+    lon: -80.3163
+    timezone: America/New_York
+    peak_local_hour: 14
+    sea_breeze: true
+    region: SE_atlantic
+  - code: KORD          # Chicago O'Hare
+    kalshi_city: CHI
+    name: Chicago
+    lat: 41.9950
+    lon: -87.9336
+    timezone: America/Chicago
+    peak_local_hour: 15
+    sea_breeze: false
+    region: midwest
+  - code: KAUS          # Austin-Bergstrom
+    kalshi_city: AUS
+    name: Austin
+    lat: 30.1944
+    lon: -97.6700
+    timezone: America/Chicago
+    peak_local_hour: 16
+    sea_breeze: false
+    region: south_central
+  - code: KDEN          # Denver International
+    kalshi_city: DEN
+    name: Denver
+    lat: 39.8466
+    lon: -104.6562
+    timezone: America/Denver
+    peak_local_hour: 15
+    sea_breeze: false
+    region: mountain
+  - code: KPHL          # Philadelphia International
+    kalshi_city: PHL
+    name: Philadelphia
+    lat: 39.8729
+    lon: -75.2407
+    timezone: America/New_York
+    peak_local_hour: 15
+    sea_breeze: false
+    region: NE_corridor
+  - code: KMDW          # Chicago Midway (alternate CHI listing)
+    kalshi_city: CHI_MDW
+    name: Chicago (Midway)
+    lat: 41.7868
+    lon: -87.7522
+    timezone: America/Chicago
+    peak_local_hour: 15
+    sea_breeze: false
+    region: midwest
+
+# Regional correlation buckets — markets in the same bucket share a correlation cap
+correlation_buckets:
+  NE_corridor: [KNYC, KPHL]
+  midwest: [KORD, KMDW]
+  SE_atlantic: [KMIA]
+  SW_pacific: [KLAX]
+  south_central: [KAUS]
+  mountain: [KDEN]

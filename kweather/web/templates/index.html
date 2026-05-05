@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Kalshi Weather MM</title>
+  <link rel="stylesheet" href="/static/kweather.css">
+  <script src="https://unpkg.com/htmx.org@1.9.12" defer></script>
+  <script src="https://unpkg.com/htmx.org/dist/ext/sse.js" defer></script>
+</head>
+<body>
+  <header>
+    <div class="status" id="status">
+      <span id="ws-dot" class="dot off"></span>
+      <span id="ws-label">disconnected</span>
+      <span class="sep">|</span>
+      <span>mode: <b id="mode">{{ state.mode }}</b></span>
+      <span class="sep">|</span>
+      <span>kill: <b id="kill">{{ "ON" if state.kill_switch else "off" }}</b></span>
+      <span class="sep">|</span>
+      <span>paused: <b id="paused">{{ "YES" if state.paused else "no" }}</b></span>
+      <span class="sep">|</span>
+      <span>theo refresh: <b id="last-theo">—</b></span>
+      <span class="sep">|</span>
+      <span>book update: <b id="last-book">—</b></span>
+      <span class="sep">|</span>
+      <span>UTC <b id="now-utc">—</b></span>
+      <span>ET <b id="now-et">—</b></span>
+    </div>
+    <div class="controls">
+      <button hx-post="/api/pause" hx-swap="none">Pause</button>
+      <button hx-post="/api/resume" hx-swap="none">Resume</button>
+      <button hx-post="/api/withdraw" hx-swap="none">Withdraw All</button>
+    </div>
+  </header>
+
+  <section class="vol-timeline">
+    <h3>Vol windows (next 12 h)</h3>
+    <div id="vol-windows"></div>
+  </section>
+
+  <section class="markets">
+    <h3>Markets</h3>
+    <table id="markets-table">
+      <thead>
+        <tr>
+          <th>Ticker</th><th>Stn</th><th>Date</th><th>Bracket</th>
+          <th>Theo</th><th>σ</th>
+          <th>Bid</th><th>Ask</th><th>Mid</th><th>Sprd</th><th>Edge</th>
+          <th>Our Bid</th><th>Our Ask</th><th>Pos</th>
+          <th>TOB</th><th>RE</th><th>State</th><th>P&amp;L</th>
+        </tr>
+      </thead>
+      <tbody id="markets-body">
+      </tbody>
+    </table>
+  </section>
+
+  <section class="rewards">
+    <h3>Rewards capture (today)</h3>
+    <div id="rewards-bars"></div>
+  </section>
+
+  <script>
+    const fmtTs = (s) => s ? new Date(s).toLocaleTimeString() : "—";
+    const fmt = (v) => v === null || v === undefined ? "—" : v;
+    const yn  = (b) => b ? "Y" : "—";
+
+    function renderRows(rows) {
+      const body = document.getElementById("markets-body");
+      body.innerHTML = "";
+      for (const r of rows) {
+        const tr = document.createElement("tr");
+        tr.className = "row state-" + (r.state || "flat");
+        tr.innerHTML = `
+          <td class="ticker">${r.ticker}</td>
+          <td>${fmt(r.station)}</td>
+          <td>${fmt(r.target_date)}</td>
+          <td>${fmt(r.bracket_label)}</td>
+          <td class="num">${fmt(r.theo_cents)}</td>
+          <td class="num">${r.sigma_f != null ? r.sigma_f.toFixed(2) : "—"}</td>
+          <td class="num">${fmt(r.best_bid)}</td>
+          <td class="num">${fmt(r.best_ask)}</td>
+          <td class="num">${r.mid != null ? r.mid.toFixed(1) : "—"}</td>
+          <td class="num">${fmt(r.spread)}</td>
+          <td class="num">${r.edge_to_mid != null ? r.edge_to_mid.toFixed(1) : "—"}</td>
+          <td class="num">${fmt(r.our_bid)}</td>
+          <td class="num">${fmt(r.our_ask)}</td>
+          <td class="num">${fmt(r.position)}</td>
+          <td>${yn(r.tob_bid)}/${yn(r.tob_ask)}</td>
+          <td>${yn(r.reward_eligible_bid)}/${yn(r.reward_eligible_ask)}</td>
+          <td>${fmt(r.state)}</td>
+          <td class="num">${(r.pnl_cents/100).toFixed(2)}</td>`;
+        body.appendChild(tr);
+      }
+    }
+
+    function renderVol(windows) {
+      const root = document.getElementById("vol-windows");
+      root.innerHTML = "";
+      const now = Date.now();
+      const horizon = now + 12 * 3600 * 1000;
+      for (const w of windows) {
+        const start = new Date(w.start_ts).getTime();
+        const end = new Date(w.end_ts).getTime();
+        if (end < now) continue;
+        const left = Math.max(0, (start - now) / (horizon - now)) * 100;
+        const width = Math.max(0.3, ((end - start) / (horizon - now)) * 100);
+        const bar = document.createElement("div");
+        bar.className = "vol-window sev-" + (w.severity || "normal");
+        bar.style.left = left + "%";
+        bar.style.width = width + "%";
+        bar.title = `${w.station_code} ${w.name} ${new Date(w.start_ts).toLocaleTimeString()}`;
+        root.appendChild(bar);
+      }
+    }
+
+    function applySnapshot(s) {
+      document.getElementById("ws-dot").className = "dot " + (s.connected_ws ? "on" : "off");
+      document.getElementById("ws-label").textContent = s.connected_ws ? "connected" : "disconnected";
+      document.getElementById("mode").textContent = s.mode;
+      document.getElementById("kill").textContent = s.kill_switch ? "ON" : "off";
+      document.getElementById("paused").textContent = s.paused ? "YES" : "no";
+      document.getElementById("last-theo").textContent = fmtTs(s.last_theo_refresh);
+      document.getElementById("last-book").textContent = fmtTs(s.last_orderbook_update);
+      const now = new Date();
+      document.getElementById("now-utc").textContent = now.toUTCString().slice(17, 25);
+      document.getElementById("now-et").textContent = new Intl.DateTimeFormat("en-US", {
+        hour: "2-digit", minute: "2-digit", second: "2-digit",
+        hour12: false, timeZone: "America/New_York"
+      }).format(now);
+      renderRows(s.rows || []);
+      renderVol(s.vol_windows || []);
+    }
+
+    async function init() {
+      try {
+        const r = await fetch("/api/state");
+        applySnapshot(await r.json());
+      } catch (e) { console.error(e); }
+      const es = new EventSource("/sse");
+      es.addEventListener("snapshot", (e) => applySnapshot(JSON.parse(e.data)));
+      es.addEventListener("delta", (e) => applySnapshot(JSON.parse(e.data)));
+    }
+    init();
+    setInterval(() => {
+      fetch("/api/state").then(r => r.json()).then(applySnapshot).catch(() => {});
+    }, 1000);
+  </script>
+</body>
+</html>
