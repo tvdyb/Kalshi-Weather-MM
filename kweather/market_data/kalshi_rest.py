@@ -149,9 +149,12 @@ _T_LABEL_RE = re.compile(r"^T(\d+)$", re.IGNORECASE)
 
 
 def _resolve_tail_brackets(events: dict[str, list[Market]], suffix_only: set[str]) -> None:
-    """Within each event, the lowest T<x> label is the lower tail (≤x) and the
-    highest T<x> label is the upper tail (≥x). Subtitle-parsed brackets are
-    already correct, so only rewrite markets in `suffix_only`.
+    """Within each event, the lowest T<x> label is the lower tail and the
+    highest T<x> label is the upper tail. Convention (verified against HIGH
+    subtitles like "87° or below" → T88, "above 95" → T95): T<x> on the lower
+    end means strictly below x, and on the upper end means strictly above x.
+    Subtitle-parsed brackets are already correct, so only rewrite markets in
+    `suffix_only`.
     """
     for markets in events.values():
         t_markets: list[tuple[int, Market]] = []
@@ -165,10 +168,10 @@ def _resolve_tail_brackets(events: dict[str, list[Market]], suffix_only: set[str
             continue
         t_markets.sort(key=lambda kv: kv[0])
         lo_v, lo_m = t_markets[0]
-        lo_m.bracket = Bracket(lo=None, hi=lo_v + 1, label=lo_m.bracket.label)
+        lo_m.bracket = Bracket(lo=None, hi=lo_v, label=lo_m.bracket.label)
         if len(t_markets) > 1:
             hi_v, hi_m = t_markets[-1]
-            hi_m.bracket = Bracket(lo=hi_v, hi=None, label=hi_m.bracket.label)
+            hi_m.bracket = Bracket(lo=hi_v + 1, hi=None, label=hi_m.bracket.label)
 
 
 def _city_to_station(city: str, stations: list) -> str | None:
